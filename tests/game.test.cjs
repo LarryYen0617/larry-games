@@ -35,3 +35,12 @@ const randomCtx={...ctx,location:{search:'?seed=73519&level=6'},URLSearchParams,
 const randomCase=engine.makeCase(6,73519);el('readAll').onclick();for(let i=0;i<randomCase.n;i++)el('people').onclick({target:{closest:q=>q==='[data-mark]'?{dataset:{mark:String(i),value:String(!!(randomCase.answer&(1<<i)))}}:null}});el('judge').onclick();assert.equal(JSON.parse(store['mist-town-random-6-73519']).ratings[0],3);assert.equal(store['mist-town-v1'],mainBefore);
 const reloadCtx={...ctx,location:{search:'?seed=73519&level=6'},URLSearchParams,module:{exports:{}}};vm.createContext(reloadCtx);vm.runInContext(source,reloadCtx);assert.match(el('clues').innerHTML,/本案已破獲/);
 console.log('PASS: 300 deterministic unique random cases, hypothesis restore/normalization, random full flow and reload, main save isolation.');
+
+for(const c of engine.cases){assert.deepEqual(engine.evidenceRows(c,[]),[]);for(let person=0;person<c.n;person++){const rows=engine.evidenceRows(c,[0],person);assert.ok(rows.every(r=>r.speaker===0));assert.ok(rows.every(r=>r.speaker===person||r.statement.a===person||(r.statement.t!=='role'&&r.statement.b===person)));}}
+el('evidence').onclick();assert.match(el('modalContent').innerHTML,/證詞整理板/);
+const pinId='0-0';el('modalContent').onclick({target:{closest:q=>q==='[data-pin]'?{dataset:{pin:pinId}}:null}});assert.deepEqual(JSON.parse(store['mist-town-random-6-73519']).states[0].pins,[pinId]);assert.match(el('modalContent').innerHTML,/已釘選/);
+el('modalContent').onclick({target:{id:'pinnedOnly',closest:()=>null}});assert.match(el('modalContent').innerHTML,/顯示 1 則證詞/);
+el('modalContent').onclick({target:{closest:q=>q==='[data-pin]'?{dataset:{pin:pinId}}:null}});assert.match(el('modalContent').innerHTML,/目前篩選下沒有證詞/);
+const pinSave=JSON.parse(mainBefore);pinSave.states[0].pins=['0-0','0-0','99-99','<script>',12];assert.deepEqual(engine.normalize(pinSave).states[0].pins,['0-0']);
+assert.equal(typeof el('continueCase').onclick,'function');
+console.log('PASS: evidence read boundary, resident relation filters, pin toggle/save/filter, invalid pin normalization, persistent continuation control.');
