@@ -29,6 +29,13 @@ function deductions(c){
  c.statements.forEach((ss,i)=>ss.forEach(s=>{const before=remaining.length;remaining=remaining.filter(m=>truth(s,m)!==!!(m&(1<<i)));result.push({i,s,before,after:remaining.length});}));
  return result;
 }
+function conflict(c,marks,read){
+ const wolves=marks.filter(v=>v===true).length,unknown=marks.filter(v=>v===null).length;
+ if(wolves>c.k)return '已標記 '+wolves+' 名狼人，超過本案的 '+c.k+' 名。請取消部分狼人標記。';
+ if(wolves+unknown<c.k)return '剩餘未判定人數不足以滿足 '+c.k+' 名狼人，請重新檢查好人標記。';
+ if(!marks.includes(null)){const m=marks.reduce((a,v,i)=>a|(v?1<<i:0),0);for(const i of read){const bad=c.statements[i].find(s=>truth(s,m)===marks[i]);if(bad)return names[i]+'被標記為'+(marks[i]?'狼人':'好人')+'，但「'+words(bad)+'」在這組判定中為'+(truth(bad,m)?'真':'假')+'，違反說話規則。';}}
+ return '目前標記無法同時滿足已讀證詞。可撤銷上一步，再逐一檢查不同假設。';
+}
 function normalize(raw){
  if(!raw||typeof raw!=='object'||!raw.states||!raw.wins)throw Error('存檔格式不正確');
  const out={current:0,states:{},wins:{},ratings:{}};
@@ -37,7 +44,7 @@ function normalize(raw){
  if(raw.wins[i]===true)out.wins[i]=true;const rating=raw.ratings?.[i];if(out.wins[i]&&Number.isInteger(rating)&&rating>=1&&rating<=3)out.ratings[i]=rating;});
  return out;
 }
-if(typeof module!=='undefined')module.exports={cases,models,valid,truth,candidates,deductions,normalize};
+if(typeof module!=='undefined')module.exports={cases,models,valid,truth,candidates,deductions,normalize,conflict};
 function avatar(i){return '<svg viewBox="0 0 90 115" aria-hidden="true"><circle cx="45" cy="48" r="38" fill="'+colors[i]+'" opacity=".3"/><path d="M8 115Q8 78 31 76L59 76Q84 80 84 115" fill="'+colors[i]+'"/><path d="M29 77L45 97 61 77" fill="#d5c6a5"/><path d="M32 60H58V82L45 88 32 82" fill="#ad947a"/><ellipse cx="45" cy="46" rx="22" ry="29" fill="#c8b394"/><path d="'+(i%3===0?'M22 62Q14 15 44 12Q76 12 68 67L60 44 51 25 28 45Z':i%3===1?'M20 38L25 15 60 12 71 39 59 30 30 32Z':'M22 56Q14 12 43 15Q71 10 69 60L59 34 30 36Z')+'" fill="#243032"/><path d="M32 49H39M51 49H58" stroke="#3a3b35" stroke-width="2"/><path d="M40 64Q45 67 51 63" fill="none" stroke="#715b4d"/><path d="M45 98V115" stroke="#d9bc80" opacity=".5"/></svg>';}
 
 if(typeof document!=='undefined'){
@@ -45,6 +52,7 @@ const $=id=>document.getElementById(id);
 let saved={current:0,states:{},wins:{},ratings:{}},storageOK=true,archiveFilter='all',pendingImport=null;
 try{const raw=localStorage.getItem('mist-town-v1');if(raw)saved=normalize(JSON.parse(raw));}catch(e){storageOK=false;}
 let current=saved.current;
+let markHistory=[];
 function fresh(n){return {marks:Array(n).fill(null),read:[],notes:'',hints:0,attempts:0,checks:0};}
 function state(){return saved.states[current]??=(fresh(cases[current].n));}
 function save(){saved.current=current;try{localStorage.setItem('mist-town-v1',JSON.stringify(saved));storageOK=true;}catch(e){storageOK=false;}$('storageStatus').textContent=storageOK?'進度已儲存於此瀏覽器':'無法自動儲存，請匯出備份';}
@@ -64,12 +72,14 @@ function render(){
  $('population').textContent=c.n+' 位居民';$('wolves').textContent=c.k+' 名狼人';$('difficulty').textContent=current<3?'初探':current<6?'疑雲':current<9?'迷局':current<12?'深夜':'長夜';
  $('progress').textContent=Object.keys(saved.wins).length+'/'+cases.length;
  $('marked').textContent=s.marks.filter(x=>x!==null).length+'/'+c.n+' 已標記';
+ $('quickStatus').textContent=s.marks.filter(x=>x!==null).length+'/'+c.n+' 已標記 · 狼人 '+s.marks.filter(x=>x===true).length+'/'+c.k;
  $('notes').value=s.notes;$('hintText').textContent=s.hints?hintMessage(s.hints):'';
  $('hint').textContent=s.hints>=3?'✧ 提示已全部展開':'✧ '+['推理方向','指出關鍵證詞','揭露一人身分'][s.hints]+' · '+(s.hints+1)+'/3';
  $('hint').disabled=s.hints>=3;
  $('people').innerHTML=Array.from({length:c.n},(_,i)=>'<article class="person '+(s.marks[i]===true?'wolf':s.marks[i]===false?'good':'')+'"><button class="portrait" data-read="'+i+'" style="--shade:'+colors[i]+'55" aria-expanded="'+s.read.includes(i)+'">'+avatar(i)+'<div><div class="num">NO. '+String(i+1).padStart(2,'0')+'</div><div class="name">'+names[i]+'</div><div class="job">'+jobs[i]+'</div></div><span class="expand">'+(s.read.includes(i)?'證詞已記錄 ✓':'詢問證詞 ↗')+'</span></button><div class="testimony '+(!s.read.includes(i)?'unread':'')+'">'+(s.read.includes(i)?c.statements[i].map(x=>'「'+words(x)+'」').join('<br>'):'尚未詢問 · 點選上方人物聽取證詞')+'</div><div class="mark"><button data-mark="'+i+'" data-value="false" class="'+(s.marks[i]===false?'active':'')+'" aria-pressed="'+(s.marks[i]===false)+'">◇ 好人</button><button data-mark="'+i+'" data-value="true" class="'+(s.marks[i]===true?'active':'')+'" aria-pressed="'+(s.marks[i]===true)+'">♧ 狼人</button></div></article>').join('');
  $('clues').innerHTML='<div class="clue"><b>01</b> 狼人恰好 '+c.k+' 名，目前標記 '+s.marks.filter(v=>v===true).length+' 名。</div><div class="clue"><b>02</b> 已取得 '+s.read.length+' / '+c.n+' 人的證詞。</div><div class="clue"><b>03</b> '+(saved.wins[current]?'本案已破獲 '+stars(saved.ratings[current]):'所有證詞合起來只有一組解答。')+'</div>';
- $('caseActions').innerHTML='<button id="readAll">一次詢問所有人</button><button id="restart">重新調查</button>'+(saved.wins[current]?'<button id="review">回顧解答</button>':'');
+ $('caseActions').innerHTML='<button id="readAll">一次詢問所有人</button><button id="undoMark" '+(!markHistory.length?'disabled':'')+'>↶ 撤銷標記</button><button id="restart">重新調查</button>'+(saved.wins[current]?'<button id="review">回顧解答</button>':'');
+ $('undoMark').onclick=()=>{if(!markHistory.length)return;s.marks=markHistory.pop();$('feedback').innerHTML='';$('analysis').textContent='已撤銷上一步標記。';save();render();$('undoMark').focus?.();};
  $('readAll').onclick=()=>{s.read=Array.from({length:c.n},(_,i)=>i);save();render();};
  $('restart').onclick=()=>modal('<h2>重新調查本案？</h2><p>清除本案的身分標記、詢問紀錄與本輪提示次數。保留筆記、已破案紀錄與最佳星級。</p><button class="primary" id="confirmRestart">重新開始本案</button>');
  if($('review'))$('review').onclick=explanation;
@@ -82,15 +92,15 @@ function explanation(){
 $('people').onclick=e=>{
  const read=e.target.closest('[data-read]'),mark=e.target.closest('[data-mark]'),s=state();
  if(read){const i=+read.dataset.read;if(!s.read.includes(i))s.read.push(i);}
- if(mark){const i=+mark.dataset.mark,v=mark.dataset.value==='true';s.marks[i]=s.marks[i]===v?null:v;}
- if(read||mark){$('feedback').innerHTML='';$('analysis').textContent='';save();render();}
+ if(mark){markHistory.push(s.marks.slice());if(markHistory.length>50)markHistory.shift();const i=+mark.dataset.mark,v=mark.dataset.value==='true';s.marks[i]=s.marks[i]===v?null:v;}
+ if(read||mark){$('feedback').innerHTML='';$('analysis').textContent='';save();render();const selector=mark?'[data-mark="'+mark.dataset.mark+'"][data-value="'+mark.dataset.value+'"]':'[data-read="'+read.dataset.read+'"]';document.querySelector(selector)?.focus?.();}
 };
 $('notes').oninput=()=>{state().notes=$('notes').value.slice(0,2000);save();};
 $('hint').onclick=()=>{state().hints=Math.min(3,state().hints+1);save();render();};
 $('check').onclick=()=>{
  const s=state(),c=cases[current];if(!s.read.length){$('analysis').textContent='先詢問至少一位居民，再檢查目前推論。';return;}
  s.checks++;const n=candidates(c,s.marks,s.read).length;
- $('analysis').textContent=n===0?'目前標記與已讀證詞互相矛盾。試著取消某個身分標記，再逐一檢查。':'依目前標記、已讀證詞與狼數，尚有 '+n+' 種可能。'+(s.read.length<c.n?'還有未詢問的居民，取得證詞後再判斷。':'若已完成所有標記，就可以提交判定。');
+ $('analysis').textContent=n===0?conflict(c,s.marks,s.read):'依目前標記、已讀證詞與狼數，尚有 '+n+' 種可能。'+(s.read.length<c.n?'還有未詢問的居民，取得證詞後再判斷。':'若已完成所有標記，就可以提交判定。');
  save();
 };
 $('judge').onclick=()=>{
@@ -109,7 +119,7 @@ $('judge').onclick=()=>{
  message('尚有矛盾。'+reason);save();
  }
 };
-function load(i){current=i;state();save();$('feedback').innerHTML='';$('analysis').textContent='';render();if($('modal').open)$('modal').close();$('caseTitle').scrollIntoView({behavior:'smooth',block:'start'});}
+function load(i){current=i;markHistory=[];state();save();$('feedback').innerHTML='';$('analysis').textContent='';render();if($('modal').open)$('modal').close();$('caseTitle').scrollIntoView({behavior:'smooth',block:'start'});}
 function chapters(){
  const completed=Object.keys(saved.wins).length,totalStars=Object.values(saved.ratings).reduce((a,b)=>a+b,0);
  modal('<div class="eyebrow">THE CASE ARCHIVE</div><h2>二十四夜・案件卷宗</h2><div class="archiveStats"><span><b>'+completed+'</b> / 24 已破獲</span><span><b>'+totalStars+'</b> / 72 星</span></div><p>第一卷學習基本判斷，第二卷挑戰八人關係謎局。所有案件皆可自由選擇。</p><div class="filters">'+[['all','全部'],['open','未破案'],['done','已破案']].map(([v,t])=>'<button data-filter="'+v+'" aria-pressed="'+(archiveFilter===v)+'" class="'+(archiveFilter===v?'active':'')+'">'+t+'</button>').join('')+'</div><div class="chapterlist">'+cases.map((c,i)=>({c,i})).filter(({i})=>archiveFilter==='all'||(archiveFilter==='done'?!!saved.wins[i]:!saved.wins[i])).map(({c,i})=>'<button data-case="'+i+'" class="'+(i===current?'current':'')+'">'+String(i+1).padStart(2,'0')+' · '+c.title+'<small>'+c.n+' 人 / '+c.k+' 狼 '+(saved.wins[i]?' · '+(stars(saved.ratings[i])||'已破獲 ✓'):'')+'</small></button>').join('')+'</div><p class="subtle">三星：第一次提交正確，未使用提示或推論檢查。二星：最多使用第一層提示；其餘成功破案得一星。保留歷次最佳星級。</p>');
@@ -133,6 +143,9 @@ $('modalContent').addEventListener('change',async e=>{
  catch(err){$('importStatus').textContent='無法匯入：'+err.message;}
 });
 document.querySelector('.close').onclick=()=>{$('modal').close();pendingImport=null;};
+$('jumpNotes').onclick=()=>{$('investigation').scrollIntoView({behavior:'smooth',block:'start'});$('notes').focus({preventScroll:true});};
+$('jumpPeople').onclick=()=>{$('people').scrollIntoView({behavior:'smooth',block:'start'});document.querySelector('[data-read]')?.focus({preventScroll:true});};
 render();save();
 }
+
 

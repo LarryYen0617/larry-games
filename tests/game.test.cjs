@@ -13,3 +13,13 @@ const restored=engine.normalize(JSON.parse(store['mist-town-v1']));assert.equal(
 assert.throws(()=>engine.normalize(null));
 console.log('PASS: 24 unique solutions, deduction chains, partial contradictions, 24 full game flows, ratings, notes, restart, 3 hints and save normalization.');
 
+
+const before=JSON.parse(store['mist-town-v1']).states[23].marks;
+el('people').onclick({target:{closest:q=>q==='[data-mark]'?{dataset:{mark:'0',value:'true'}}:null}});
+assert.equal(JSON.parse(store['mist-town-v1']).states[23].marks[0],true);
+el('undoMark').onclick();assert.deepEqual(JSON.parse(store['mist-town-v1']).states[23].marks,before);
+assert.match(el('analysis').textContent,/已撤銷/);
+const first=engine.cases[0];assert.match(engine.conflict(first,[true,true,null,null],[]),/超過/);
+assert.match(engine.conflict(first,[false,false,false,false],[]),/不足/);
+for(const c of engine.cases){const wrong=Array.from({length:1<<c.n},(_,m)=>m).find(m=>m!==c.answer&&m.toString(2).split('1').length-1===c.k);const marks=Array.from({length:c.n},(_,i)=>!!(wrong&(1<<i)));assert.match(engine.conflict(c,marks,Array.from({length:c.n},(_,i)=>i)),/違反說話規則/);assert.doesNotMatch(engine.conflict(c,marks,[]),/違反說話規則/);}
+console.log('PASS: undo persistence, wolf-count bounds and evidence-based conflict messages for all 24 cases.');
