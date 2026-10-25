@@ -13,7 +13,7 @@ function truth(s,m){const a=!!(m&(1<<s.a)),b=!!(m&(1<<s.b));return s.t==='role'?
 function words(s){return s.t==='role'?names[s.a]+'是'+(s.v?'狼人':'好人')+'。':s.t==='same'?names[s.a]+'和'+names[s.b]+'屬於相同陣營。':s.t==='diff'?names[s.a]+'和'+names[s.b]+'屬於不同陣營。':names[s.a]+'和'+names[s.b]+'之中，恰好有'+s.v+'名狼人。';}
 function valid(c,m){return count(m)===c.k&&c.statements.every((ss,i)=>ss.every(s=>truth(s,m)!==!!(m&(1<<i))));}
 function models(c){return Array.from({length:1<<c.n},(_,m)=>m).filter(m=>valid(c,m));}
-function makeCase(index){const n=index<3?4:index<6?5:index<9?6:8,k=index<3?1:index<9?2:3,r=rng(7129+index*431);const all=Array.from({length:1<<n},(_,m)=>m).filter(m=>count(m)===k);const answer=all[Math.floor(r()*all.length)],statements=Array.from({length:n},()=>[]),pool=[];
+function makeCase(index,seed=7129+index*431){const n=index<3?4:index<6?5:index<9?6:8,k=index<3?1:index<9?2:3,r=rng(seed);const all=Array.from({length:1<<n},(_,m)=>m).filter(m=>count(m)===k);const answer=all[Math.floor(r()*all.length)],statements=Array.from({length:n},()=>[]),pool=[];
  for(let i=0;i<n;i++){for(let a=0;a<n;a++){if(a===i)continue;for(const v of [false,true])pool.push({i,t:'role',a,v});if(index>1)for(let b=a+1;b<n;b++){if(b===i)continue;pool.push({i,t:'same',a,b},{i,t:'diff',a,b});if(index>5)for(let v=0;v<=2;v++)pool.push({i,t:'count',a,b,v});}}}
  const choices=pool.filter(s=>truth(s,answer)!==!!(answer&(1<<s.i)));let possible=all.slice();
  for(let i=0;i<n;i++){const opts=choices.filter(s=>s.i===i);const s=opts[Math.floor(r()*opts.length)];statements[i].push(s);possible=possible.filter(m=>truth(s,m)!==!!(m&(1<<i)));}
@@ -40,22 +40,28 @@ function normalize(raw){
  if(!raw||typeof raw!=='object'||!raw.states||!raw.wins)throw Error('存檔格式不正確');
  const out={current:0,states:{},wins:{},ratings:{}};
  if(Number.isInteger(raw.current)&&raw.current>=0&&raw.current<cases.length)out.current=raw.current;
- cases.forEach((c,i)=>{const s=raw.states[i];if(s&&Array.isArray(s.marks)&&s.marks.length===c.n){out.states[i]={marks:s.marks.map(v=>typeof v==='boolean'?v:null),read:Array.isArray(s.read)?[...new Set(s.read.filter(v=>Number.isInteger(v)&&v>=0&&v<c.n))]:[],notes:typeof s.notes==='string'?s.notes.slice(0,2000):'',hints:Number.isInteger(s.hints)?Math.max(0,Math.min(3,s.hints)):0,attempts:Number.isInteger(s.attempts)?Math.max(0,Math.min(9999,s.attempts)):0,checks:Number.isInteger(s.checks)?Math.max(0,Math.min(9999,s.checks)):0};}
+ cases.forEach((c,i)=>{const s=raw.states[i];if(s&&Array.isArray(s.marks)&&s.marks.length===c.n){out.states[i]={marks:s.marks.map(v=>typeof v==='boolean'?v:null),read:Array.isArray(s.read)?[...new Set(s.read.filter(v=>Number.isInteger(v)&&v>=0&&v<c.n))]:[],hypothesis:Array.isArray(s.hypothesis)&&s.hypothesis.length===c.n?s.hypothesis.map(v=>typeof v==='boolean'?v:null):null,notes:typeof s.notes==='string'?s.notes.slice(0,2000):'',hints:Number.isInteger(s.hints)?Math.max(0,Math.min(3,s.hints)):0,attempts:Number.isInteger(s.attempts)?Math.max(0,Math.min(9999,s.attempts)):0,checks:Number.isInteger(s.checks)?Math.max(0,Math.min(9999,s.checks)):0};}
  if(raw.wins[i]===true)out.wins[i]=true;const rating=raw.ratings?.[i];if(out.wins[i]&&Number.isInteger(rating)&&rating>=1&&rating<=3)out.ratings[i]=rating;});
  return out;
 }
-if(typeof module!=='undefined')module.exports={cases,models,valid,truth,candidates,deductions,normalize,conflict};
+if(typeof module!=='undefined')module.exports={cases,models,valid,truth,candidates,deductions,normalize,conflict,makeCase};
 function avatar(i){return '<svg viewBox="0 0 90 115" aria-hidden="true"><circle cx="45" cy="48" r="38" fill="'+colors[i]+'" opacity=".3"/><path d="M8 115Q8 78 31 76L59 76Q84 80 84 115" fill="'+colors[i]+'"/><path d="M29 77L45 97 61 77" fill="#d5c6a5"/><path d="M32 60H58V82L45 88 32 82" fill="#ad947a"/><ellipse cx="45" cy="46" rx="22" ry="29" fill="#c8b394"/><path d="'+(i%3===0?'M22 62Q14 15 44 12Q76 12 68 67L60 44 51 25 28 45Z':i%3===1?'M20 38L25 15 60 12 71 39 59 30 30 32Z':'M22 56Q14 12 43 15Q71 10 69 60L59 34 30 36Z')+'" fill="#243032"/><path d="M32 49H39M51 49H58" stroke="#3a3b35" stroke-width="2"/><path d="M40 64Q45 67 51 63" fill="none" stroke="#715b4d"/><path d="M45 98V115" stroke="#d9bc80" opacity=".5"/></svg>';}
 
 if(typeof document!=='undefined'){
 const $=id=>document.getElementById(id);
+const params=typeof location!=='undefined'?new URLSearchParams(location.search):null;
+const seed=Number(params?.get('seed')),level=Number(params?.get('level'));
+const challenge=Number.isInteger(seed)&&seed>0&&seed<=999999&&[0,6,12].includes(level);
+const saveKey=challenge?'mist-town-random-'+level+'-'+seed:'mist-town-v1';
+if(challenge){const c=makeCase(level,seed);c.title='迷霧委託 #'+seed;c.story='一份新的匿名委託送到警署。身分重新洗牌，只有證詞與已知狼數值得相信。';cases.splice(0,cases.length,c);}
+
 let saved={current:0,states:{},wins:{},ratings:{}},storageOK=true,archiveFilter='all',pendingImport=null;
-try{const raw=localStorage.getItem('mist-town-v1');if(raw)saved=normalize(JSON.parse(raw));}catch(e){storageOK=false;}
+try{const raw=localStorage.getItem(saveKey);if(raw)saved=normalize(JSON.parse(raw));}catch(e){storageOK=false;}
 let current=saved.current;
 let markHistory=[];
-function fresh(n){return {marks:Array(n).fill(null),read:[],notes:'',hints:0,attempts:0,checks:0};}
+function fresh(n){return {marks:Array(n).fill(null),read:[],notes:'',hypothesis:null,hints:0,attempts:0,checks:0};}
 function state(){return saved.states[current]??=(fresh(cases[current].n));}
-function save(){saved.current=current;try{localStorage.setItem('mist-town-v1',JSON.stringify(saved));storageOK=true;}catch(e){storageOK=false;}$('storageStatus').textContent=storageOK?'進度已儲存於此瀏覽器':'無法自動儲存，請匯出備份';}
+function save(){saved.current=current;try{localStorage.setItem(saveKey,JSON.stringify(saved));storageOK=true;}catch(e){storageOK=false;}$('storageStatus').textContent=storageOK?'進度已儲存於此瀏覽器':'無法自動儲存，請匯出備份';}
 function stars(n){return n?'★'.repeat(n)+'☆'.repeat(3-n):'';}
 function modal(html){$('modalContent').innerHTML=html;if(!$('modal').open)$('modal').showModal();}
 function message(text,type='error'){$('feedback').innerHTML='<div class="'+type+'"></div>';$('feedback').firstElementChild.textContent=text;}
@@ -68,9 +74,10 @@ function hintMessage(level){
 function render(){
  const c=cases[current],s=state();
  $('caseNo').textContent='CASE '+String(current+1).padStart(2,'0')+' / '+cases.length+' · '+(current<12?'第一卷／霧鎮初夜':'第二卷／長夜回聲');
+ if(challenge)$('caseNo').textContent='自由調查 · 案件碼 '+seed+' · '+({0:'入門',6:'進階',12:'專家'}[level]);
  $('caseTitle').textContent=c.title;$('story').textContent=c.story;
  $('population').textContent=c.n+' 位居民';$('wolves').textContent=c.k+' 名狼人';$('difficulty').textContent=current<3?'初探':current<6?'疑雲':current<9?'迷局':current<12?'深夜':'長夜';
- $('progress').textContent=Object.keys(saved.wins).length+'/'+cases.length;
+ $('progress').textContent=challenge?'自由調查':Object.keys(saved.wins).length+'/'+cases.length;
  $('marked').textContent=s.marks.filter(x=>x!==null).length+'/'+c.n+' 已標記';
  $('quickStatus').textContent=s.marks.filter(x=>x!==null).length+'/'+c.n+' 已標記 · 狼人 '+s.marks.filter(x=>x===true).length+'/'+c.k;
  $('notes').value=s.notes;$('hintText').textContent=s.hints?hintMessage(s.hints):'';
@@ -110,7 +117,7 @@ $('judge').onclick=()=>{
  if(m===c.answer){
  const rating=s.hints===0&&s.checks===0&&s.attempts===1?3:s.hints<=1?2:1;
  saved.wins[current]=true;saved.ratings[current]=Math.max(saved.ratings[current]||0,rating);save();render();
- $('feedback').innerHTML='<div class="success"><div class="rating">'+stars(rating)+'</div>✓ 判定正確！'+(current===cases.length-1?'霧已散去，最後一份卷宗完成。':'霧鎮又離黎明近了一步。')+'<p>本輪提交 '+s.attempts+' 次 · 使用提示 '+s.hints+' 層 · 推論檢查 '+s.checks+' 次</p><button id="explain">查看推理過程</button><button id="next">'+(current<cases.length-1?'前往下一案 →':'回到案件卷宗 →')+'</button></div>';
+ $('feedback').innerHTML='<div class="success"><div class="rating">'+stars(rating)+'</div>✓ 判定正確！'+(challenge?'這份委託完成了。下一個謎團正等著你。':current===cases.length-1?'霧已散去，最後一份卷宗完成。':'霧鎮又離黎明近了一步。')+'<p>本輪提交 '+s.attempts+' 次 · 使用提示 '+s.hints+' 層 · 推論檢查 '+s.checks+' 次</p><button id="explain">查看推理過程</button><button id="next">'+(challenge?'挑戰另一份委託 →':current<cases.length-1?'前往下一案 →':'回到案件卷宗 →')+'</button></div>';
  $('explain').onclick=explanation;$('next').onclick=()=>current<cases.length-1?load(current+1):chapters();
  }else{
  let reason='你標記的狼人數不符合本案已知人數。';
@@ -121,25 +128,37 @@ $('judge').onclick=()=>{
 };
 function load(i){current=i;markHistory=[];state();save();$('feedback').innerHTML='';$('analysis').textContent='';render();if($('modal').open)$('modal').close();$('caseTitle').scrollIntoView({behavior:'smooth',block:'start'});}
 function chapters(){
+ if(challenge){challengeMenu();return;}
  const completed=Object.keys(saved.wins).length,totalStars=Object.values(saved.ratings).reduce((a,b)=>a+b,0);
  modal('<div class="eyebrow">THE CASE ARCHIVE</div><h2>二十四夜・案件卷宗</h2><div class="archiveStats"><span><b>'+completed+'</b> / 24 已破獲</span><span><b>'+totalStars+'</b> / 72 星</span></div><p>第一卷學習基本判斷，第二卷挑戰八人關係謎局。所有案件皆可自由選擇。</p><div class="filters">'+[['all','全部'],['open','未破案'],['done','已破案']].map(([v,t])=>'<button data-filter="'+v+'" aria-pressed="'+(archiveFilter===v)+'" class="'+(archiveFilter===v?'active':'')+'">'+t+'</button>').join('')+'</div><div class="chapterlist">'+cases.map((c,i)=>({c,i})).filter(({i})=>archiveFilter==='all'||(archiveFilter==='done'?!!saved.wins[i]:!saved.wins[i])).map(({c,i})=>'<button data-case="'+i+'" class="'+(i===current?'current':'')+'">'+String(i+1).padStart(2,'0')+' · '+c.title+'<small>'+c.n+' 人 / '+c.k+' 狼 '+(saved.wins[i]?' · '+(stars(saved.ratings[i])||'已破獲 ✓'):'')+'</small></button>').join('')+'</div><p class="subtle">三星：第一次提交正確，未使用提示或推論檢查。二星：最多使用第一層提示；其餘成功破案得一星。保留歷次最佳星級。</p>');
 }
+function challengeMenu(){
+ modal('<div class="eyebrow">ENDLESS INVESTIGATION</div><h2>自由調查</h2><p>每份委託都有唯一解。相同難度與案件碼會產生相同謎題，可把網址分享給朋友。主線進度分開保存。</p><label class="field">難度<select id="challengeLevel"><option value="0">入門 · 4 人 / 1 狼</option><option value="6">進階 · 6 人 / 2 狼</option><option value="12">專家 · 8 人 / 3 狼</option></select></label><label class="field">案件碼（1–999999，留白隨機）<input id="challengeSeed" type="number" min="1" max="999999" inputmode="numeric" placeholder="隨機產生"></label><p id="challengeError" role="status"></p><button class="primary" id="startChallenge">接下委託 →</button><p><a class="homeLink" href="./">返回 24 關主線</a></p>');
+}
+$('randomCase').onclick=challengeMenu;
+$('hypothesis').onclick=()=>{
+ const s=state(),c=cases[current],role=v=>v===null?'未判定':v?'狼人':'好人';
+ modal('<div class="eyebrow">HYPOTHESIS BOARD</div><h2>假設對照板</h2><p>把目前標記存成假設 A，再嘗試另一種判斷。這裡不揭露答案，也不影響星級。筆記與已讀證詞不會被還原。</p><div class="compare"><table><thead><tr><th>居民</th><th>假設 A</th><th>目前判斷</th></tr></thead><tbody>'+Array.from({length:c.n},(_,i)=>'<tr class="'+(s.hypothesis&&s.hypothesis[i]!==s.marks[i]?'changed':'')+'"><th>'+names[i]+'</th><td>'+ (s.hypothesis?role(s.hypothesis[i]):'尚未儲存')+'</td><td>'+role(s.marks[i])+'</td></tr>').join('')+'</tbody></table></div><div class="boardActions"><button id="saveHypothesis">'+(s.hypothesis?'以目前標記覆寫 A':'存為假設 A')+'</button><button id="restoreHypothesis" '+(!s.hypothesis?'disabled':'')+'>還原假設 A</button></div><p class="subtle">金色列表示兩個假設不同。還原後仍可用「撤銷標記」回復。</p>');
+};
 $('chapters').onclick=()=>{archiveFilter='all';chapters();};
 $('modalContent').onclick=e=>{
+ if(e.target.id==='startChallenge'){const raw=$('challengeSeed').value.trim(),chosen=raw?Number(raw):Math.floor(Math.random()*999999)+1;if(!Number.isInteger(chosen)||chosen<1||chosen>999999){$('challengeError').textContent='請輸入 1 到 999999 的整數案件碼。';return;}location.href='./?seed='+chosen+'&level='+$('challengeLevel').value;return;}
+ if(e.target.id==='saveHypothesis'){state().hypothesis=state().marks.slice();save();$('hypothesis').onclick();return;}
+ if(e.target.id==='restoreHypothesis'&&state().hypothesis){markHistory.push(state().marks.slice());state().marks=state().hypothesis.slice();save();render();$('modal').close();$('feedback').innerHTML='';$('analysis').textContent='已還原假設 A；可用撤銷回復。';return;}
  const b=e.target.closest('[data-case]'),f=e.target.closest('[data-filter]');
  if(b)load(+b.dataset.case);if(f){archiveFilter=f.dataset.filter;chapters();}
  if(e.target.id==='confirmRestart'){const notes=state().notes;saved.states[current]=fresh(cases[current].n);state().notes=notes;load(current);}
  if(e.target.id==='confirmImport'&&pendingImport){saved=pendingImport;pendingImport=null;load(saved.current);message('存檔已匯入，繼續調查吧。','success');}
 };
-$('rules').onclick=()=>modal('<div class="eyebrow">HOW TO PLAY · V2</div><h2>你的武器，是邏輯。</h2><ol><li>點選居民卡片取得證詞，也能「一次詢問所有人」。</li><li><b>好人每一句都為真，狼人每一句都為假。</b>如果同一人說兩句，每句都必須各自符合規則。</li><li>狼人數是可靠資訊。「相同陣營」指兩人同為好人或同為狼人。「恰好一名狼人」為假時，可能是零名或兩名。</li><li>點選「好人／狼人」標記，再次點選可清除。</li><li>「檢查目前推論」只使用已讀證詞、已知狼數與目前標記，未讀證詞不會暗中參與判定。</li><li>三階段提示依序提供方向、關鍵證詞、最後才揭露一人身分。</li><li>全員標記後提交。錯誤可以重試；過關後查看排除過程與逐句驗證。</li></ol><p>本作為原創固定邏輯謎題。職業、外貌、氣氛敘事都不是證據；每個案件的身分獨立，不沿用上案答案。</p><p>星級：無提示、無檢查、第一次提交正確為三星；最多使用第一層提示為二星；其餘破案為一星。重玩保留最佳紀錄。</p><p>更換瀏覽器或新版遊戲檔前，請先「匯出存檔」，再於新檔案匯入。</p>');
+$('rules').onclick=()=>modal('<div class="eyebrow">HOW TO PLAY · V3</div><h2>你的武器，是邏輯。</h2><ol><li>點選居民卡片取得證詞，也能「一次詢問所有人」。</li><li><b>好人每一句都為真，狼人每一句都為假。</b>如果同一人說兩句，每句都必須各自符合規則。</li><li>狼人數是可靠資訊。「相同陣營」指兩人同為好人或同為狼人。「恰好一名狼人」為假時，可能是零名或兩名。</li><li>點選「好人／狼人」標記，再次點選可清除。</li><li>「檢查目前推論」只使用已讀證詞、已知狼數與目前標記，未讀證詞不會暗中參與判定。</li><li>三階段提示依序提供方向、關鍵證詞、最後才揭露一人身分。</li><li>全員標記後提交。錯誤可以重試；過關後查看排除過程與逐句驗證。</li></ol><p>本作包含 24 關主線及自由調查模式。自由調查可選難度與案件碼，進度分開保存；「假設對照板」可保存與還原一組標記，不影響星級。職業、外貌、氣氛敘事都不是證據；每個案件的身分獨立，不沿用上案答案。</p><p>星級：無提示、無檢查、第一次提交正確為三星；最多使用第一層提示為二星；其餘破案為一星。重玩保留最佳紀錄。</p><p>更換瀏覽器或新版遊戲檔前，請先「匯出存檔」，再於新檔案匯入。</p>');
 $('backup').onclick=()=>modal('<div class="eyebrow">SAVE & RESTORE</div><h2>帶走你的調查進度</h2><p>存檔包含每案的筆記、身分標記、完成紀錄與星級。換電腦或更新遊戲檔時，可以再匯入。</p><button id="exportSave" class="primary">下載存檔 JSON</button><label class="fileLabel">匯入存檔<input id="importSave" type="file" accept=".json,application/json"></label><p id="importStatus" aria-live="polite"></p>');
 $('modalContent').addEventListener('click',e=>{
  if(e.target.id!=='exportSave')return;
- const blob=new Blob([JSON.stringify({game:'mist-town',version:2,data:saved},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mist-town-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ const blob=new Blob([JSON.stringify({game:'mist-town',version:2,challenge:challenge?{seed,level}:null,data:saved},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mist-town-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
 $('modalContent').addEventListener('change',async e=>{
  if(e.target.id!=='importSave')return;const file=e.target.files[0];if(!file)return;
- try{if(file.size>200000)throw Error('檔案過大，請選擇本遊戲匯出的 JSON 存檔。');const raw=JSON.parse(await file.text());if(raw.game!=='mist-town'||raw.version!==2)throw Error('這不是支援的霧鎮存檔。');pendingImport=normalize(raw.data);modal('<h2>確認匯入存檔</h2><p>這份存檔已完成 '+Object.keys(pendingImport.wins).length+' 個案件。匯入會取代目前瀏覽器的進度；建議先保留目前的匯出備份。</p><button id="confirmImport" class="primary">確認匯入</button>');}
+ try{if(file.size>200000)throw Error('檔案過大，請選擇本遊戲匯出的 JSON 存檔。');const raw=JSON.parse(await file.text());if(raw.game!=='mist-town'||raw.version!==2)throw Error('這不是支援的霧鎮存檔。');if(challenge?raw.challenge?.seed!==seed||raw.challenge?.level!==level:!!raw.challenge)throw Error('存檔屬於不同案件模式，請先開啟對應的主線或案件碼。');pendingImport=normalize(raw.data);modal('<h2>確認匯入存檔</h2><p>這份存檔已完成 '+Object.keys(pendingImport.wins).length+' 個案件。匯入會取代目前瀏覽器的進度；建議先保留目前的匯出備份。</p><button id="confirmImport" class="primary">確認匯入</button>');}
  catch(err){$('importStatus').textContent='無法匯入：'+err.message;}
 });
 document.querySelector('.close').onclick=()=>{$('modal').close();pendingImport=null;};
@@ -147,5 +166,4 @@ $('jumpNotes').onclick=()=>{$('investigation').scrollIntoView({behavior:'smooth'
 $('jumpPeople').onclick=()=>{$('people').scrollIntoView({behavior:'smooth',block:'start'});document.querySelector('[data-read]')?.focus({preventScroll:true});};
 render();save();
 }
-
 

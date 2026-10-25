@@ -23,3 +23,15 @@ const first=engine.cases[0];assert.match(engine.conflict(first,[true,true,null,n
 assert.match(engine.conflict(first,[false,false,false,false],[]),/不足/);
 for(const c of engine.cases){const wrong=Array.from({length:1<<c.n},(_,m)=>m).find(m=>m!==c.answer&&m.toString(2).split('1').length-1===c.k);const marks=Array.from({length:c.n},(_,i)=>!!(wrong&(1<<i)));assert.match(engine.conflict(c,marks,Array.from({length:c.n},(_,i)=>i)),/違反說話規則/);assert.doesNotMatch(engine.conflict(c,marks,[]),/違反說話規則/);}
 console.log('PASS: undo persistence, wolf-count bounds and evidence-based conflict messages for all 24 cases.');
+
+// Random generation must stay deterministic and uniquely solvable across all difficulties.
+for(const level of [0,6,12])for(let seed=1;seed<=100;seed++){const c=engine.makeCase(level,seed);assert.deepEqual(engine.models(c),[c.answer]);assert.deepEqual(c,engine.makeCase(level,seed));}
+const clickModal=id=>el('modalContent').onclick({target:{id,closest:()=>null}});
+el('hypothesis').onclick();clickModal('saveHypothesis');const snap=JSON.parse(store['mist-town-v1']).states[23].marks;
+el('people').onclick({target:{closest:q=>q==='[data-mark]'?{dataset:{mark:'0',value:'true'}}:null}});clickModal('restoreHypothesis');assert.deepEqual(JSON.parse(store['mist-town-v1']).states[23].marks,snap);
+assert.deepEqual(engine.normalize(JSON.parse(store['mist-town-v1'])).states[23].hypothesis,snap);
+const mainBefore=store['mist-town-v1'];
+const randomCtx={...ctx,location:{search:'?seed=73519&level=6'},URLSearchParams,module:{exports:{}}};vm.createContext(randomCtx);vm.runInContext(source,randomCtx);assert.equal(store['mist-town-v1'],mainBefore);assert.match(el('caseNo').textContent,/73519/);assert.ok(store['mist-town-random-6-73519']);
+const randomCase=engine.makeCase(6,73519);el('readAll').onclick();for(let i=0;i<randomCase.n;i++)el('people').onclick({target:{closest:q=>q==='[data-mark]'?{dataset:{mark:String(i),value:String(!!(randomCase.answer&(1<<i)))}}:null}});el('judge').onclick();assert.equal(JSON.parse(store['mist-town-random-6-73519']).ratings[0],3);assert.equal(store['mist-town-v1'],mainBefore);
+const reloadCtx={...ctx,location:{search:'?seed=73519&level=6'},URLSearchParams,module:{exports:{}}};vm.createContext(reloadCtx);vm.runInContext(source,reloadCtx);assert.match(el('clues').innerHTML,/本案已破獲/);
+console.log('PASS: 300 deterministic unique random cases, hypothesis restore/normalization, random full flow and reload, main save isolation.');
