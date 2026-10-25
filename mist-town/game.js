@@ -76,7 +76,7 @@ function render(){
  $('caseNo').textContent='CASE '+String(current+1).padStart(2,'0')+' / '+cases.length+' · '+(current<12?'第一卷／霧鎮初夜':'第二卷／長夜回聲');
  if(challenge)$('caseNo').textContent='自由調查 · 案件碼 '+seed+' · '+({0:'入門',6:'進階',12:'專家'}[level]);
  $('caseTitle').textContent=c.title;$('story').textContent=c.story;
- $('population').textContent=c.n+' 位居民';$('wolves').textContent=c.k+' 名狼人';$('difficulty').textContent=current<3?'初探':current<6?'疑雲':current<9?'迷局':current<12?'深夜':'長夜';
+ $('population').textContent=c.n+' 位居民';$('wolves').textContent=c.k+' 名狼人';$('difficulty').textContent=challenge?({0:'入門',6:'進階',12:'專家'}[level]):current<3?'初探':current<6?'疑雲':current<9?'迷局':current<12?'深夜':'長夜';
  $('progress').textContent=challenge?'自由調查':Object.keys(saved.wins).length+'/'+cases.length;
  $('marked').textContent=s.marks.filter(x=>x!==null).length+'/'+c.n+' 已標記';
  $('quickStatus').textContent=s.marks.filter(x=>x!==null).length+'/'+c.n+' 已標記 · 狼人 '+s.marks.filter(x=>x===true).length+'/'+c.k;
