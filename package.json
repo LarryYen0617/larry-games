@@ -1,0 +1,1 @@
+{"name":"larry-games","version":"2.0.0","private":true,"scripts":{"test":"node tests/game.test.cjs"}}
