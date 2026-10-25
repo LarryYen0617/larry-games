@@ -44,3 +44,20 @@ el('modalContent').onclick({target:{closest:q=>q==='[data-pin]'?{dataset:{pin:pi
 const pinSave=JSON.parse(mainBefore);pinSave.states[0].pins=['0-0','0-0','99-99','<script>',12];assert.deepEqual(engine.normalize(pinSave).states[0].pins,['0-0']);
 assert.equal(typeof el('continueCase').onclick,'function');
 console.log('PASS: evidence read boundary, resident relation filters, pin toggle/save/filter, invalid pin normalization, persistent continuation control.');
+
+assert.equal(engine.taipeiDay(new Date('2026-10-25T15:59:59Z')),'2026-10-25');
+assert.equal(engine.taipeiDay(new Date('2026-10-25T16:00:00Z')),'2026-10-26');
+assert.equal(engine.dailySpec('2026-02-29'),null);assert.equal(engine.dailySpec('bad'),null);assert.ok(engine.dailySpec('2028-02-29'));
+for(let d=1;d<=31;d++){const spec=engine.dailySpec('2026-10-'+String(d).padStart(2,'0'));const c=engine.makeCase(spec.level,spec.seed);assert.deepEqual(engine.models(c),[c.answer]);}
+assert.equal(engine.milestones({}).filter(m=>m.value>=m.target).length,0);
+assert.equal(engine.milestones(JSON.parse(mainBefore)).filter(m=>m.value>=m.target).length,6);
+assert.equal(engine.milestones({wins:{},ratings:{0:3}})[4].value,0);
+const beforeDailyMain=store['mist-town-v1'],beforeDailyRandom=store['mist-town-random-6-73519'];
+const dailyCtx={...ctx,location:{search:'?daily=2026-10-26'},URLSearchParams,module:{exports:{}}};vm.createContext(dailyCtx);vm.runInContext(source,dailyCtx);
+assert.match(el('caseTitle').textContent,/每日委託.*2026-10-26/);
+const spec=engine.dailySpec('2026-10-26'),dc=engine.makeCase(spec.level,spec.seed);el('readAll').onclick();for(let i=0;i<dc.n;i++)el('people').onclick({target:{closest:q=>q==='[data-mark]'?{dataset:{mark:String(i),value:String(!!(dc.answer&(1<<i)))}}:null}});el('judge').onclick();assert.equal(JSON.parse(store['mist-town-daily-2026-10-26']).ratings[0],3);
+assert.equal(store['mist-town-v1'],beforeDailyMain);assert.equal(store['mist-town-random-6-73519'],beforeDailyRandom);
+el('dailyCase').onclick();assert.equal((el('modalContent').innerHTML.match(/class="dailyCard/g)||[]).length,7);
+el('achievements').onclick();assert.ok(el('modalContent').innerHTML.includes('已達成 6 / 6'));
+const dailyReload={...ctx,location:{search:'?daily=2026-10-26'},URLSearchParams,module:{exports:{}}};vm.createContext(dailyReload);vm.runInContext(source,dailyReload);assert.match(el('clues').innerHTML,/本案已破獲/);
+(async()=>{const raw={game:'mist-town',version:2,daily:'2026-10-25',challenge:{seed:spec.seed,level:spec.level},data:JSON.parse(store['mist-town-daily-2026-10-26'])};await el('modalContent').listeners.change({target:{id:'importSave',files:[{size:100,text:async()=>JSON.stringify(raw)}]}});assert.match(el('importStatus').textContent,/對應的每日委託日期/);raw.daily='2026-10-26';await el('modalContent').listeners.change({target:{id:'importSave',files:[{size:100,text:async()=>JSON.stringify(raw)}]}});assert.match(el('modalContent').innerHTML,/確認匯入存檔/);console.log('PASS: Taipei midnight, calendar validation, 31 daily unique cases, six milestones, daily flow/reload/isolation and date-matched import.');})().catch(e=>{console.error(e);process.exitCode=1;});

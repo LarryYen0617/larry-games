@@ -47,16 +47,29 @@ function normalize(raw){
  if(raw.wins[i]===true)out.wins[i]=true;const rating=raw.ratings?.[i];if(out.wins[i]&&Number.isInteger(rating)&&rating>=1&&rating<=3)out.ratings[i]=rating;});
  return out;
 }
-if(typeof module!=='undefined')module.exports={cases,models,valid,truth,candidates,deductions,normalize,conflict,makeCase,evidenceRows};
+function taipeiDay(now=new Date()){
+ const p=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);const get=t=>p.find(x=>x.type===t).value;return get('year')+'-'+get('month')+'-'+get('day');
+}
+function dailySpec(day){
+ if(typeof day!=='string'||!/^20\d{2}-\d{2}-\d{2}$/.test(day))return null;
+ const time=Date.parse(day+'T00:00:00Z');if(!Number.isFinite(time)||new Date(time).toISOString().slice(0,10)!==day)return null;
+ const ordinal=Math.floor(time/86400000);return {day,seed:ordinal+100000,level:[0,6,12][ordinal%3]};
+}
+function milestones(data){
+ const wins=Array.from({length:24},(_,i)=>data.wins?.[i]===true),ratings=Array.from({length:24},(_,i)=>wins[i]&&Number.isInteger(data.ratings?.[i])?Math.max(0,Math.min(3,data.ratings[i])):0);
+ return [{name:'初見曙光',description:'破獲第一個主線案件',value:wins.filter(Boolean).length,target:1},{name:'霧鎮巡夜人',description:'破獲六個主線案件',value:wins.filter(Boolean).length,target:6},{name:'第一卷結案',description:'完成第一卷全部案件',value:wins.slice(0,12).filter(Boolean).length,target:12},{name:'長夜終章',description:'完成全部主線案件',value:wins.filter(Boolean).length,target:24},{name:'精準推理',description:'三個主線案件取得三星',value:ratings.filter(v=>v===3).length,target:3},{name:'滿天星光',description:'主線累積七十二星',value:ratings.reduce((a,b)=>a+b,0),target:72}];
+}
+if(typeof module!=='undefined')module.exports={cases,models,valid,truth,candidates,deductions,normalize,conflict,makeCase,evidenceRows,taipeiDay,dailySpec,milestones};
 function avatar(i){return '<svg viewBox="0 0 90 115" aria-hidden="true"><circle cx="45" cy="48" r="38" fill="'+colors[i]+'" opacity=".3"/><path d="M8 115Q8 78 31 76L59 76Q84 80 84 115" fill="'+colors[i]+'"/><path d="M29 77L45 97 61 77" fill="#d5c6a5"/><path d="M32 60H58V82L45 88 32 82" fill="#ad947a"/><ellipse cx="45" cy="46" rx="22" ry="29" fill="#c8b394"/><path d="'+(i%3===0?'M22 62Q14 15 44 12Q76 12 68 67L60 44 51 25 28 45Z':i%3===1?'M20 38L25 15 60 12 71 39 59 30 30 32Z':'M22 56Q14 12 43 15Q71 10 69 60L59 34 30 36Z')+'" fill="#243032"/><path d="M32 49H39M51 49H58" stroke="#3a3b35" stroke-width="2"/><path d="M40 64Q45 67 51 63" fill="none" stroke="#715b4d"/><path d="M45 98V115" stroke="#d9bc80" opacity=".5"/></svg>';}
 
 if(typeof document!=='undefined'){
 const $=id=>document.getElementById(id);
 const params=typeof location!=='undefined'?new URLSearchParams(location.search):null;
-const seed=Number(params?.get('seed')),level=Number(params?.get('level'));
+const daily=dailySpec(params?.get('daily')==='today'?taipeiDay():params?.get('daily'));
+const seed=daily?daily.seed:Number(params?.get('seed')),level=daily?daily.level:Number(params?.get('level'));
 const challenge=Number.isInteger(seed)&&seed>0&&seed<=999999&&[0,6,12].includes(level);
-const saveKey=challenge?'mist-town-random-'+level+'-'+seed:'mist-town-v1';
-if(challenge){const c=makeCase(level,seed);c.title='迷霧委託 #'+seed;c.story='一份新的匿名委託送到警署。身分重新洗牌，只有證詞與已知狼數值得相信。';cases.splice(0,cases.length,c);}
+const saveKey=daily?'mist-town-daily-'+daily.day:challenge?'mist-town-random-'+level+'-'+seed:'mist-town-v1';
+if(challenge){const c=makeCase(level,seed);c.title=daily?'每日委託 · '+daily.day:'迷霧委託 #'+seed;c.story='一份新的匿名委託送到警署。身分重新洗牌，只有證詞與已知狼數值得相信。';cases.splice(0,cases.length,c);}
 
 let saved={current:0,states:{},wins:{},ratings:{}},storageOK=true,archiveFilter='all',pendingImport=null;
 try{const raw=localStorage.getItem(saveKey);if(raw)saved=normalize(JSON.parse(raw));}catch(e){storageOK=false;}
@@ -78,6 +91,7 @@ function render(){
  const c=cases[current],s=state();
  $('caseNo').textContent='CASE '+String(current+1).padStart(2,'0')+' / '+cases.length+' · '+(current<12?'第一卷／霧鎮初夜':'第二卷／長夜回聲');
  if(challenge)$('caseNo').textContent='自由調查 · 案件碼 '+seed+' · '+({0:'入門',6:'進階',12:'專家'}[level]);
+ if(daily)$('caseNo').textContent='每日委託 · 臺灣時間 · '+({0:'入門',6:'進階',12:'專家'}[level]);
  $('caseTitle').textContent=c.title;$('story').textContent=c.story;
  $('population').textContent=c.n+' 位居民';$('wolves').textContent=c.k+' 名狼人';$('difficulty').textContent=challenge?({0:'入門',6:'進階',12:'專家'}[level]):current<3?'初探':current<6?'疑雲':current<9?'迷局':current<12?'深夜':'長夜';
  $('caseProgress').innerHTML='<span>'+(saved.wins[current]?'已破案 · 最佳 '+stars(saved.ratings[current]):'調查中 · 已詢問 '+s.read.length+'/'+c.n+' 人')+'</span><span>'+s.marks.filter(v=>v!==null).length+'/'+c.n+' 已判斷</span>';
@@ -89,12 +103,12 @@ function render(){
  $('hint').disabled=s.hints>=3;
  $('people').innerHTML=Array.from({length:c.n},(_,i)=>'<article class="person '+(s.marks[i]===true?'wolf':s.marks[i]===false?'good':'')+'"><button class="portrait" data-read="'+i+'" style="--shade:'+colors[i]+'55" aria-expanded="'+s.read.includes(i)+'">'+avatar(i)+'<div><div class="num">NO. '+String(i+1).padStart(2,'0')+'</div><div class="name">'+names[i]+'</div><div class="job">'+jobs[i]+'</div></div><span class="expand">'+(s.read.includes(i)?'證詞已記錄 ✓':'詢問證詞 ↗')+'</span></button><div class="testimony '+(!s.read.includes(i)?'unread':'')+'">'+(s.read.includes(i)?c.statements[i].map(x=>'「'+words(x)+'」').join('<br>'):'尚未詢問 · 點選上方人物聽取證詞')+'</div><div class="mark"><button data-mark="'+i+'" data-value="false" class="'+(s.marks[i]===false?'active':'')+'" aria-pressed="'+(s.marks[i]===false)+'">◇ 好人</button><button data-mark="'+i+'" data-value="true" class="'+(s.marks[i]===true?'active':'')+'" aria-pressed="'+(s.marks[i]===true)+'">♧ 狼人</button></div></article>').join('');
  $('clues').innerHTML='<div class="clue"><b>01</b> 狼人恰好 '+c.k+' 名，目前標記 '+s.marks.filter(v=>v===true).length+' 名。</div><div class="clue"><b>02</b> 已取得 '+s.read.length+' / '+c.n+' 人的證詞。</div><div class="clue"><b>03</b> '+(saved.wins[current]?'本案已破獲 '+stars(saved.ratings[current]):'所有證詞合起來只有一組解答。')+'</div>';
- $('caseActions').innerHTML='<button id="readAll">一次詢問所有人</button><button id="undoMark" '+(!markHistory.length?'disabled':'')+'>↶ 撤銷標記</button><button id="restart">重新調查</button>'+(saved.wins[current]?'<button id="review">回顧解答</button><button id="continueCase">'+(challenge?'另一份委託 →':current<cases.length-1?'下一案 →':'查看總進度 →')+'</button>':'');
+ $('caseActions').innerHTML='<button id="readAll">一次詢問所有人</button><button id="undoMark" '+(!markHistory.length?'disabled':'')+'>↶ 撤銷標記</button><button id="restart">重新調查</button>'+(saved.wins[current]?'<button id="review">回顧解答</button><button id="continueCase">'+(daily?'每日委託簿 →':challenge?'另一份委託 →':current<cases.length-1?'下一案 →':'查看總進度 →')+'</button>':'');
  $('undoMark').onclick=()=>{if(!markHistory.length)return;s.marks=markHistory.pop();$('feedback').innerHTML='';$('analysis').textContent='已撤銷上一步標記。';save();render();$('undoMark').focus?.();};
  $('readAll').onclick=()=>{s.read=Array.from({length:c.n},(_,i)=>i);save();render();};
  $('restart').onclick=()=>modal('<h2>重新調查本案？</h2><p>清除本案的身分標記、詢問紀錄與本輪提示次數。保留筆記、已破案紀錄與最佳星級。</p><button class="primary" id="confirmRestart">重新開始本案</button>');
  if($('review'))$('review').onclick=explanation;
- if($('continueCase'))$('continueCase').onclick=()=>challenge?challengeMenu():current<cases.length-1?load(current+1):chapters();
+ if($('continueCase'))$('continueCase').onclick=()=>daily?dailyMenu():challenge?challengeMenu():current<cases.length-1?load(current+1):chapters();
  $('storageStatus').textContent=storageOK?'進度已儲存於此瀏覽器':'無法自動儲存，請匯出備份';
 }
 function explanation(){
@@ -122,7 +136,7 @@ $('judge').onclick=()=>{
  if(m===c.answer){
  const rating=s.hints===0&&s.checks===0&&s.attempts===1?3:s.hints<=1?2:1;
  saved.wins[current]=true;saved.ratings[current]=Math.max(saved.ratings[current]||0,rating);save();render();
- $('feedback').innerHTML='<div class="success"><div class="rating">'+stars(rating)+'</div>✓ 判定正確！'+(challenge?'這份委託完成了。下一個謎團正等著你。':current===cases.length-1?'霧已散去，最後一份卷宗完成。':'霧鎮又離黎明近了一步。')+'<p>本輪提交 '+s.attempts+' 次 · 使用提示 '+s.hints+' 層 · 推論檢查 '+s.checks+' 次</p><button id="explain">查看推理過程</button><button id="next">'+(challenge?'挑戰另一份委託 →':current<cases.length-1?'前往下一案 →':'回到案件卷宗 →')+'</button></div>';
+ $('feedback').innerHTML='<div class="success"><div class="rating">'+stars(rating)+'</div>✓ 判定正確！'+(challenge?'這份委託完成了。下一個謎團正等著你。':current===cases.length-1?'霧已散去，最後一份卷宗完成。':'霧鎮又離黎明近了一步。')+'<p>本輪提交 '+s.attempts+' 次 · 使用提示 '+s.hints+' 層 · 推論檢查 '+s.checks+' 次</p><button id="explain">查看推理過程</button><button id="next">'+(daily?'每日委託簿 →':challenge?'挑戰另一份委託 →':current<cases.length-1?'前往下一案 →':'回到案件卷宗 →')+'</button></div>';
  $('explain').onclick=explanation;$('next').onclick=()=>current<cases.length-1?load(current+1):chapters();
  }else{
  let reason='你標記的狼人數不符合本案已知人數。';
@@ -133,10 +147,21 @@ $('judge').onclick=()=>{
 };
 function load(i){current=i;markHistory=[];state();save();$('feedback').innerHTML='';$('analysis').textContent='';render();if($('modal').open)$('modal').close();$('caseTitle').scrollIntoView({behavior:'smooth',block:'start'});}
 function chapters(){
+ if(daily){dailyMenu();return;}
  if(challenge){challengeMenu();return;}
  const completed=Object.keys(saved.wins).length,totalStars=Object.values(saved.ratings).reduce((a,b)=>a+b,0);
  modal('<div class="eyebrow">THE CASE ARCHIVE</div><h2>二十四夜・案件卷宗</h2><div class="archiveStats"><span><b>'+completed+'</b> / 24 已破獲</span><span><b>'+totalStars+'</b> / 72 星</span></div><p>第一卷學習基本判斷，第二卷挑戰八人關係謎局。所有案件皆可自由選擇。</p><div class="filters">'+[['all','全部'],['open','未破案'],['done','已破案']].map(([v,t])=>'<button data-filter="'+v+'" aria-pressed="'+(archiveFilter===v)+'" class="'+(archiveFilter===v?'active':'')+'">'+t+'</button>').join('')+'</div><div class="chapterlist">'+cases.map((c,i)=>({c,i})).filter(({i})=>archiveFilter==='all'||(archiveFilter==='done'?!!saved.wins[i]:!saved.wins[i])).map(({c,i})=>'<button data-case="'+i+'" class="'+(i===current?'current':'')+'">'+String(i+1).padStart(2,'0')+' · '+c.title+'<small>'+c.n+' 人 / '+c.k+' 狼 '+(saved.wins[i]?' · '+(stars(saved.ratings[i])||'已破獲 ✓'):'')+'</small></button>').join('')+'</div><p class="subtle">三星：第一次提交正確，未使用提示或推論檢查。二星：最多使用第一層提示；其餘成功破案得一星。保留歷次最佳星級。</p>');
 }
+function dailyMenu(){
+ const today=taipeiDay(),base=Date.parse(today+'T00:00:00Z');let done=0;
+ const rows=Array.from({length:7},(_,i)=>{const day=new Date(base-i*86400000).toISOString().slice(0,10),spec=dailySpec(day);let entry=null;try{entry=JSON.parse(localStorage.getItem('mist-town-daily-'+day));}catch(e){}const won=entry?.wins?.[0]===true;if(won)done++;const rating=entry?.ratings?.[0];return '<a class="dailyCard '+(won?'done':'')+'" href="?daily='+day+'"><span><b>'+(i===0?'今日委託':day)+'</b><small>'+({0:'入門 · 4 人 / 1 狼',6:'進階 · 6 人 / 2 狼',12:'專家 · 8 人 / 3 狼'}[spec.level])+'</small></span><strong>'+(won?(Number.isInteger(rating)&&rating>=1&&rating<=3?stars(rating):'已破案'):'開始 →')+'</strong></a>';}).join('');
+ modal('<div class="eyebrow">SEVEN NIGHTS</div><h2>每日委託簿</h2><p>臺灣時間 '+today+' · 最近七天完成 '+done+'/7 份委託</p><p>每天固定一題，三種難度輪替。可以補玩，不需要連續登入。相同日期的題目相同，可分享網址一起挑戰。</p><div class="dailyList">'+rows+'</div><p class="subtle">進度依日期保留在此瀏覽器。每份委託需個別匯出備份；主線成就只計算 24 關主線。</p><a class="homeLink" href="./">返回主線 →</a>');
+}
+$('dailyCase').onclick=dailyMenu;
+$('achievements').onclick=()=>{
+ let data=challenge?{}:saved;try{if(challenge)data=JSON.parse(localStorage.getItem('mist-town-v1'))||{};}catch(e){}
+ const all=milestones(data);modal('<div class="eyebrow">YOUR LEGACY</div><h2>調查員成就</h2><p>已達成 '+all.filter(m=>m.value>=m.target).length+' / '+all.length+' 項。成就依主線最佳紀錄計算，重玩不會失去已獲得的星級。</p><div class="milestoneList">'+all.map(m=>'<article class="milestone '+(m.value>=m.target?'earned':'')+'"><div><strong>'+(m.value>=m.target?'✦ ':'◇ ')+m.name+'</strong><span>'+Math.min(m.value,m.target)+' / '+m.target+'</span></div><p>'+m.description+'</p><progress value="'+Math.min(m.value,m.target)+'" max="'+m.target+'" aria-label="'+m.name+'"></progress></article>').join('')+'</div><a class="homeLink" href="./">繼續主線調查 →</a>');
+};
 function evidenceBoard(){
  const c=cases[current],s=state();
  const rows=evidenceRows(c,s.read,evidencePerson).filter(row=>!evidencePinned||s.pins.includes(row.id));
@@ -164,16 +189,16 @@ $('modalContent').onclick=e=>{
  if(e.target.id==='confirmRestart'){const notes=state().notes;saved.states[current]=fresh(cases[current].n);state().notes=notes;load(current);}
  if(e.target.id==='confirmImport'&&pendingImport){saved=pendingImport;pendingImport=null;load(saved.current);message('存檔已匯入，繼續調查吧。','success');}
 };
-$('rules').onclick=()=>modal('<div class="eyebrow">HOW TO PLAY · V3.1</div><h2>你的武器，是邏輯。</h2><ol><li>點選居民卡片取得證詞，也能「一次詢問所有人」。</li><li><b>好人每一句都為真，狼人每一句都為假。</b>如果同一人說兩句，每句都必須各自符合規則。</li><li>狼人數是可靠資訊。「相同陣營」指兩人同為好人或同為狼人。「恰好一名狼人」為假時，可能是零名或兩名。</li><li>點選「好人／狼人」標記，再次點選可清除。</li><li>「檢查目前推論」只使用已讀證詞、已知狼數與目前標記，未讀證詞不會暗中參與判定。</li><li>三階段提示依序提供方向、關鍵證詞、最後才揭露一人身分。</li><li>全員標記後提交。錯誤可以重試；過關後查看排除過程與逐句驗證。</li></ol><p>本作包含 24 關主線及自由調查模式。自由調查可選難度與案件碼，進度分開保存；「假設對照板」可保存與還原一組標記；「證詞整理板」可依居民篩選、釘選已讀證詞，兩者都不影響星級。職業、外貌、氣氛敘事都不是證據；每個案件的身分獨立，不沿用上案答案。</p><p>星級：無提示、無檢查、第一次提交正確為三星；最多使用第一層提示為二星；其餘破案為一星。重玩保留最佳紀錄。</p><p>更換瀏覽器或新版遊戲檔前，請先「匯出存檔」，再於新檔案匯入。</p>');
+$('rules').onclick=()=>modal('<div class="eyebrow">HOW TO PLAY · V3.2</div><h2>你的武器，是邏輯。</h2><ol><li>點選居民卡片取得證詞，也能「一次詢問所有人」。</li><li><b>好人每一句都為真，狼人每一句都為假。</b>如果同一人說兩句，每句都必須各自符合規則。</li><li>狼人數是可靠資訊。「相同陣營」指兩人同為好人或同為狼人。「恰好一名狼人」為假時，可能是零名或兩名。</li><li>點選「好人／狼人」標記，再次點選可清除。</li><li>「檢查目前推論」只使用已讀證詞、已知狼數與目前標記，未讀證詞不會暗中參與判定。</li><li>三階段提示依序提供方向、關鍵證詞、最後才揭露一人身分。</li><li>全員標記後提交。錯誤可以重試；過關後查看排除過程與逐句驗證。</li></ol><p>本作包含 24 關主線、自由調查及每日委託。每日委託以臺灣日期固定出題，三種難度輪替，可以補玩最近七天；主線成就不計入自由調查與每日委託。自由調查可選難度與案件碼，進度分開保存；「假設對照板」可保存與還原一組標記；「證詞整理板」可依居民篩選、釘選已讀證詞，兩者都不影響星級。職業、外貌、氣氛敘事都不是證據；每個案件的身分獨立，不沿用上案答案。</p><p>星級：無提示、無檢查、第一次提交正確為三星；最多使用第一層提示為二星；其餘破案為一星。重玩保留最佳紀錄。</p><p>更換瀏覽器或新版遊戲檔前，請先「匯出存檔」，再於新檔案匯入。</p>');
 $('backup').onclick=()=>modal('<div class="eyebrow">SAVE & RESTORE</div><h2>帶走你的調查進度</h2><p>存檔包含每案的筆記、身分標記、完成紀錄與星級。換電腦或更新遊戲檔時，可以再匯入。</p><button id="exportSave" class="primary">下載存檔 JSON</button><label class="fileLabel">匯入存檔<input id="importSave" type="file" accept=".json,application/json"></label><p id="importStatus" aria-live="polite"></p>');
 $('modalContent').addEventListener('click',e=>{
  if(e.target.id!=='exportSave')return;
- const blob=new Blob([JSON.stringify({game:'mist-town',version:2,challenge:challenge?{seed,level}:null,data:saved},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mist-town-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ const blob=new Blob([JSON.stringify({game:'mist-town',version:2,daily:daily?.day||null,challenge:challenge?{seed,level}:null,data:saved},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=daily?'mist-town-daily-'+daily.day+'.json':challenge?'mist-town-'+level+'-'+seed+'.json':'mist-town-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
 $('modalContent').addEventListener('change',async e=>{
  if(e.target.id==='evidencePerson'){evidencePerson=Number(e.target.value);evidenceBoard();$('evidencePerson').focus?.();return;}
  if(e.target.id!=='importSave')return;const file=e.target.files[0];if(!file)return;
- try{if(file.size>200000)throw Error('檔案過大，請選擇本遊戲匯出的 JSON 存檔。');const raw=JSON.parse(await file.text());if(raw.game!=='mist-town'||raw.version!==2)throw Error('這不是支援的霧鎮存檔。');if(challenge?raw.challenge?.seed!==seed||raw.challenge?.level!==level:!!raw.challenge)throw Error('存檔屬於不同案件模式，請先開啟對應的主線或案件碼。');pendingImport=normalize(raw.data);modal('<h2>確認匯入存檔</h2><p>這份存檔已完成 '+Object.keys(pendingImport.wins).length+' 個案件。匯入會取代目前瀏覽器的進度；建議先保留目前的匯出備份。</p><button id="confirmImport" class="primary">確認匯入</button>');}
+ try{if(file.size>200000)throw Error('檔案過大，請選擇本遊戲匯出的 JSON 存檔。');const raw=JSON.parse(await file.text());if(raw.game!=='mist-town'||raw.version!==2)throw Error('這不是支援的霧鎮存檔。');if((raw.daily||null)!==(daily?.day||null))throw Error('請開啟這份存檔對應的每日委託日期。');if(challenge?raw.challenge?.seed!==seed||raw.challenge?.level!==level:!!raw.challenge)throw Error('存檔屬於不同案件模式，請先開啟對應的主線或案件碼。');pendingImport=normalize(raw.data);modal('<h2>確認匯入存檔</h2><p>這份存檔已完成 '+Object.keys(pendingImport.wins).length+' 個案件。匯入會取代目前瀏覽器的進度；建議先保留目前的匯出備份。</p><button id="confirmImport" class="primary">確認匯入</button>');}
  catch(err){$('importStatus').textContent='無法匯入：'+err.message;}
 });
 document.querySelector('.close').onclick=()=>{$('modal').close();pendingImport=null;};
