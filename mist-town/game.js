@@ -24,6 +24,18 @@ const cases=Array.from({length:24},(_,i)=>makeCase(i));
 function candidates(c,marks=Array(c.n).fill(null),read=Array.from({length:c.n},(_,i)=>i)){
  return Array.from({length:1<<c.n},(_,m)=>m).filter(m=>count(m)===c.k&&marks.every((v,i)=>v===null||v===!!(m&(1<<i)))&&read.every(i=>c.statements[i].every(s=>truth(s,m)!==!!(m&(1<<i)))));
 }
+function forcedMoves(c,marks=Array(c.n).fill(null),read=[]){
+ // Only disclosed testimony and the public wolf count may influence this guidance.
+ const possible=candidates(c,marks,read);
+ if(!possible.length)return {possible:0,forced:[]};
+ const forced=[];
+ for(let i=0;i<c.n;i++){
+  if(marks[i]!==null)continue;
+  const wolves=possible.filter(m=>!!(m&(1<<i))).length;
+  if(wolves===0||wolves===possible.length)forced.push({index:i,wolf:wolves===possible.length});
+ }
+ return {possible:possible.length,forced};
+}
 function deductions(c){
  let remaining=Array.from({length:1<<c.n},(_,m)=>m).filter(m=>count(m)===c.k);const result=[];
  c.statements.forEach((ss,i)=>ss.forEach(s=>{const before=remaining.length;remaining=remaining.filter(m=>truth(s,m)!==!!(m&(1<<i)));result.push({i,s,before,after:remaining.length});}));
@@ -59,7 +71,7 @@ function milestones(data){
  const wins=Array.from({length:24},(_,i)=>data.wins?.[i]===true),ratings=Array.from({length:24},(_,i)=>wins[i]&&Number.isInteger(data.ratings?.[i])?Math.max(0,Math.min(3,data.ratings[i])):0);
  return [{name:'初見曙光',description:'破獲第一個主線案件',value:wins.filter(Boolean).length,target:1},{name:'霧鎮巡夜人',description:'破獲六個主線案件',value:wins.filter(Boolean).length,target:6},{name:'第一卷結案',description:'完成第一卷全部案件',value:wins.slice(0,12).filter(Boolean).length,target:12},{name:'長夜終章',description:'完成全部主線案件',value:wins.filter(Boolean).length,target:24},{name:'精準推理',description:'三個主線案件取得三星',value:ratings.filter(v=>v===3).length,target:3},{name:'滿天星光',description:'主線累積七十二星',value:ratings.reduce((a,b)=>a+b,0),target:72}];
 }
-if(typeof module!=='undefined')module.exports={cases,models,valid,truth,candidates,deductions,normalize,conflict,makeCase,evidenceRows,taipeiDay,dailySpec,milestones};
+if(typeof module!=='undefined')module.exports={cases,models,valid,truth,candidates,forcedMoves,deductions,normalize,conflict,makeCase,evidenceRows,taipeiDay,dailySpec,milestones};
 function avatar(i){return '<svg viewBox="0 0 90 115" aria-hidden="true"><circle cx="45" cy="48" r="38" fill="'+colors[i]+'" opacity=".3"/><path d="M8 115Q8 78 31 76L59 76Q84 80 84 115" fill="'+colors[i]+'"/><path d="M29 77L45 97 61 77" fill="#d5c6a5"/><path d="M32 60H58V82L45 88 32 82" fill="#ad947a"/><ellipse cx="45" cy="46" rx="22" ry="29" fill="#c8b394"/><path d="'+(i%3===0?'M22 62Q14 15 44 12Q76 12 68 67L60 44 51 25 28 45Z':i%3===1?'M20 38L25 15 60 12 71 39 59 30 30 32Z':'M22 56Q14 12 43 15Q71 10 69 60L59 34 30 36Z')+'" fill="#243032"/><path d="M32 49H39M51 49H58" stroke="#3a3b35" stroke-width="2"/><path d="M40 64Q45 67 51 63" fill="none" stroke="#715b4d"/><path d="M45 98V115" stroke="#d9bc80" opacity=".5"/></svg>';}
 
 if(typeof document!=='undefined'){
@@ -129,6 +141,19 @@ $('check').onclick=()=>{
  $('analysis').textContent=n===0?conflict(c,s.marks,s.read):'依目前標記、已讀證詞與狼數，尚有 '+n+' 種可能。'+(s.read.length<c.n?'還有未詢問的居民，取得證詞後再判斷。':'若已完成所有標記，就可以提交判定。');
  save();
 };
+$('nextStep').onclick=()=>{
+ const s=state(),c=cases[current];
+ if(!s.read.length){$('analysis').textContent='先詢問至少一位居民，才有證詞可以推導。';return;}
+ if(!s.marks.includes(null)){$('analysis').textContent='所有居民都已標記。可提交判定，或先檢查推論是否矛盾。';return;}
+ s.checks++;
+ const result=forcedMoves(c,s.marks,s.read);
+ if(!result.possible){$('analysis').textContent=conflict(c,s.marks,s.read);}
+ else if(result.forced.length){
+  const move=result.forced[0];
+  $('analysis').textContent='由已讀證詞與已知狼數，可確定 '+names[move.index]+'必定是'+(move.wolf?'狼人':'好人')+'（剩餘 '+result.possible+' 種可能皆相同）。請自行標記；尚未詢問的證詞不參與推導。';
+ }else{$('analysis').textContent='目前仍有 '+result.possible+' 種可能，尚無可必然確定的未標記身分。請詢問更多居民，或比較不同假設。';}
+ save();
+};
 $('judge').onclick=()=>{
  const c=cases[current],s=state();
  if(s.marks.includes(null)){message('請先為每位居民標記好人或狼人。');return;}
@@ -189,7 +214,7 @@ $('modalContent').onclick=e=>{
  if(e.target.id==='confirmRestart'){const notes=state().notes;saved.states[current]=fresh(cases[current].n);state().notes=notes;load(current);}
  if(e.target.id==='confirmImport'&&pendingImport){saved=pendingImport;pendingImport=null;load(saved.current);message('存檔已匯入，繼續調查吧。','success');}
 };
-$('rules').onclick=()=>modal('<div class="eyebrow">HOW TO PLAY · V3.2</div><h2>你的武器，是邏輯。</h2><ol><li>點選居民卡片取得證詞，也能「一次詢問所有人」。</li><li><b>好人每一句都為真，狼人每一句都為假。</b>如果同一人說兩句，每句都必須各自符合規則。</li><li>狼人數是可靠資訊。「相同陣營」指兩人同為好人或同為狼人。「恰好一名狼人」為假時，可能是零名或兩名。</li><li>點選「好人／狼人」標記，再次點選可清除。</li><li>「檢查目前推論」只使用已讀證詞、已知狼數與目前標記，未讀證詞不會暗中參與判定。</li><li>三階段提示依序提供方向、關鍵證詞、最後才揭露一人身分。</li><li>全員標記後提交。錯誤可以重試；過關後查看排除過程與逐句驗證。</li></ol><p>本作包含 24 關主線、自由調查及每日委託。每日委託以臺灣日期固定出題，三種難度輪替，可以補玩最近七天；主線成就不計入自由調查與每日委託。自由調查可選難度與案件碼，進度分開保存；「假設對照板」可保存與還原一組標記；「證詞整理板」可依居民篩選、釘選已讀證詞，兩者都不影響星級。職業、外貌、氣氛敘事都不是證據；每個案件的身分獨立，不沿用上案答案。</p><p>星級：無提示、無檢查、第一次提交正確為三星；最多使用第一層提示為二星；其餘破案為一星。重玩保留最佳紀錄。</p><p>更換瀏覽器或新版遊戲檔前，請先「匯出存檔」，再於新檔案匯入。</p>');
+$('rules').onclick=()=>modal('<div class="eyebrow">HOW TO PLAY · V3.3</div><h2>你的武器，是邏輯。</h2><ol><li>點選居民卡片取得證詞，也能「一次詢問所有人」。</li><li><b>好人每一句都為真，狼人每一句都為假。</b>如果同一人說兩句，每句都必須各自符合規則。</li><li>狼人數是可靠資訊。「相同陣營」指兩人同為好人或同為狼人。「恰好一名狼人」為假時，可能是零名或兩名。</li><li>點選「好人／狼人」標記，再次點選可清除。</li><li>「檢查目前推論」與「推理下一步」只使用已讀證詞、已知狼數與目前標記，未讀證詞不會暗中參與判定；使用任一功能會計入推論檢查次數並影響星級。</li><li>三階段提示依序提供方向、關鍵證詞、最後才揭露一人身分。</li><li>全員標記後提交。錯誤可以重試；過關後查看排除過程與逐句驗證。</li></ol><p>本作包含 24 關主線、自由調查及每日委託。每日委託以臺灣日期固定出題，三種難度輪替，可以補玩最近七天；主線成就不計入自由調查與每日委託。自由調查可選難度與案件碼，進度分開保存；「假設對照板」可保存與還原一組標記；「證詞整理板」可依居民篩選、釘選已讀證詞，兩者都不影響星級。職業、外貌、氣氛敘事都不是證據；每個案件的身分獨立，不沿用上案答案。</p><p>星級：無提示、無檢查、第一次提交正確為三星；最多使用第一層提示為二星；其餘破案為一星。重玩保留最佳紀錄。</p><p>更換瀏覽器或新版遊戲檔前，請先「匯出存檔」，再於新檔案匯入。</p>');
 $('backup').onclick=()=>modal('<div class="eyebrow">SAVE & RESTORE</div><h2>帶走你的調查進度</h2><p>存檔包含每案的筆記、身分標記、完成紀錄與星級。換電腦或更新遊戲檔時，可以再匯入。</p><button id="exportSave" class="primary">下載存檔 JSON</button><label class="fileLabel">匯入存檔<input id="importSave" type="file" accept=".json,application/json"></label><p id="importStatus" aria-live="polite"></p>');
 $('modalContent').addEventListener('click',e=>{
  if(e.target.id!=='exportSave')return;
