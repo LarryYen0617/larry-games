@@ -61,3 +61,22 @@ el('dailyCase').onclick();assert.equal((el('modalContent').innerHTML.match(/clas
 el('achievements').onclick();assert.ok(el('modalContent').innerHTML.includes('已達成 6 / 6'));
 const dailyReload={...ctx,location:{search:'?daily=2026-10-26'},URLSearchParams,module:{exports:{}}};vm.createContext(dailyReload);vm.runInContext(source,dailyReload);assert.match(el('clues').innerHTML,/本案已破獲/);
 (async()=>{const raw={game:'mist-town',version:2,daily:'2026-10-25',challenge:{seed:spec.seed,level:spec.level},data:JSON.parse(store['mist-town-daily-2026-10-26'])};await el('modalContent').listeners.change({target:{id:'importSave',files:[{size:100,text:async()=>JSON.stringify(raw)}]}});assert.match(el('importStatus').textContent,/對應的每日委託日期/);raw.daily='2026-10-26';await el('modalContent').listeners.change({target:{id:'importSave',files:[{size:100,text:async()=>JSON.stringify(raw)}]}});assert.match(el('modalContent').innerHTML,/確認匯入存檔/);console.log('PASS: Taipei midnight, calendar validation, 31 daily unique cases, six milestones, daily flow/reload/isolation and date-matched import.');})().catch(e=>{console.error(e);process.exitCode=1;});
+
+
+for(const c of engine.cases){
+ const blank=Array(c.n).fill(null);
+ const without=engine.forcedMoves(c,blank,[]);
+ assert.equal(without.possible,engine.candidates(c,blank,[]).length);
+ assert.deepEqual(without.forced,[],'wolf count alone cannot identify an individual');
+ for(let readCount=1;readCount<=c.n;readCount++){
+  const read=Array.from({length:readCount},(_,i)=>i),step=engine.forcedMoves(c,blank,read);
+  const all=engine.candidates(c,blank,read);
+  assert.equal(step.possible,all.length);
+  for(const f of step.forced)assert.ok(all.every(m=>!!(m&(1<<f.index))===f.wolf));
+  if(readCount===c.n){assert.equal(step.possible,1);assert.equal(step.forced.length,c.n);}
+ }
+}
+assert.equal(typeof el('nextStep').onclick,'function');
+el('nextStep').onclick();
+assert.match(el('analysis').textContent,/所有居民都已標記/);
+console.log('PASS: evidence-limited forced deductions across 24 cases, no hidden testimony leak, next-step UI on completed cases.');
