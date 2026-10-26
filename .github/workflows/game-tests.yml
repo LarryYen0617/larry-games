@@ -1,0 +1,27 @@
+name: 霧鎮遊戲回歸測試
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mist-town/**'
+      - 'tests/**'
+      - '.github/workflows/game-tests.yml'
+  pull_request:
+    paths:
+      - 'mist-town/**'
+      - 'tests/**'
+      - '.github/workflows/game-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  game-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 驗證24關唯一解、每日委託、存檔及互動流程
+        run: node tests/game.test.cjs
